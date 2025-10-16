@@ -1,11 +1,27 @@
 -- Seed data for VOD Platform
--- Run this after schema.sql
+-- Run this after schema.sql and migration script
 
 -- ==========================================
 -- SAMPLE ADMIN USER (Manual creation via Supabase Auth UI recommended)
 -- ==========================================
 -- After creating a user via Supabase Auth, update their role:
 -- UPDATE profiles SET role = 'admin' WHERE id = 'user-uuid-here';
+
+-- ==========================================
+-- STUDIOS DATA
+-- ==========================================
+INSERT INTO studios (name, slug, logo_url, description) VALUES
+    ('Disney+', 'disney-plus', '/studios/disney-plus.svg', 'The official home of Disney, Pixar, Marvel, Star Wars, and National Geographic'),
+    ('Netflix', 'netflix', '/studios/netflix.svg', 'Watch TV shows and movies online or stream to your smart TV, game console, PC, Mac, mobile, tablet and more'),
+    ('HBO Max', 'hbo-max', '/studios/hbo-max.svg', 'Stream all of HBO together with even more favorites from WB, DC, Cartoon Network and more'),
+    ('Pixar', 'pixar', '/studios/pixar.svg', 'Pixar Animation Studios - Creating animated feature films'),
+    ('Marvel Studios', 'marvel', '/studios/marvel.png', 'Marvel Studios productions featuring superheroes from Marvel Comics'),
+    ('Lucasfilm', 'star-wars', '/studios/star-wars.png', 'Home of Star Wars and Indiana Jones'),
+    ('National Geographic', 'nat-geo', '/studios/nat-geo.svg', 'Premium documentaries and nature content'),
+    ('Warner Bros', 'warner-bros', '/studios/warner-bros.svg', 'Warner Bros. Entertainment productions'),
+    ('Universal Pictures', 'universal', '/studios/universal.svg', 'Universal Pictures film productions'),
+    ('Paramount', 'paramount', '/studios/paramount.svg', 'Paramount Pictures Corporation')
+ON CONFLICT (slug) DO NOTHING;
 
 -- ==========================================
 -- ADDITIONAL CATEGORIES (if needed)
@@ -24,102 +40,207 @@ INSERT INTO categories (name, slug, description) VALUES
 ON CONFLICT (slug) DO NOTHING;
 
 -- ==========================================
--- SAMPLE VIDEOS (for testing - replace URLs with actual content)
+-- SAMPLE MOVIES (for testing - replace URLs with actual content)
 -- ==========================================
-INSERT INTO videos (
-    title, 
-    description, 
-    video_url, 
-    thumbnail_url, 
-    poster_url,
-    trailer_url,
-    duration, 
-    release_year, 
-    language,
-    quality,
-    published,
-    featured
-) VALUES
-    (
-        'Sample Action Movie',
-        'An exciting action-packed thriller that will keep you on the edge of your seat.',
-        'https://example.com/videos/sample1.mp4',
-        'https://example.com/thumbnails/sample1.jpg',
-        'https://example.com/posters/sample1.jpg',
-        'https://example.com/trailers/sample1.mp4',
-        7200, -- 2 hours
-        2023,
-        'en',
-        ARRAY['SD', 'HD', '4K'],
-        true,
-        true
-    ),
-    (
-        'Comedy Central',
-        'A hilarious comedy that will make you laugh until you cry.',
-        'https://example.com/videos/sample2.mp4',
-        'https://example.com/thumbnails/sample2.jpg',
-        'https://example.com/posters/sample2.jpg',
-        'https://example.com/trailers/sample2.mp4',
-        5400, -- 90 minutes
-        2023,
-        'en',
-        ARRAY['SD', 'HD'],
-        true,
-        false
-    ),
-    (
-        'Sci-Fi Adventure',
-        'Journey through space and time in this epic science fiction adventure.',
-        'https://example.com/videos/sample3.mp4',
-        'https://example.com/thumbnails/sample3.jpg',
-        'https://example.com/posters/sample3.jpg',
-        'https://example.com/trailers/sample3.mp4',
-        8100, -- 2h 15m
-        2024,
-        'en',
-        ARRAY['SD', 'HD', '4K'],
-        true,
-        true
-    );
-
--- Get video IDs for category assignment
 DO $$
 DECLARE
-    action_movie_id UUID;
-    comedy_movie_id UUID;
-    scifi_movie_id UUID;
+    marvel_studio_id UUID;
+    disney_studio_id UUID;
+    netflix_studio_id UUID;
     action_cat_id UUID;
     comedy_cat_id UUID;
     scifi_cat_id UUID;
-    thriller_cat_id UUID;
+    drama_cat_id UUID;
+    adventure_cat_id UUID;
+    movie1_id UUID;
+    movie2_id UUID;
+    movie3_id UUID;
 BEGIN
-    -- Get video IDs
-    SELECT id INTO action_movie_id FROM videos WHERE title = 'Sample Action Movie';
-    SELECT id INTO comedy_movie_id FROM videos WHERE title = 'Comedy Central';
-    SELECT id INTO scifi_movie_id FROM videos WHERE title = 'Sci-Fi Adventure';
+    -- Get studio IDs
+    SELECT id INTO marvel_studio_id FROM studios WHERE slug = 'marvel';
+    SELECT id INTO disney_studio_id FROM studios WHERE slug = 'disney-plus';
+    SELECT id INTO netflix_studio_id FROM studios WHERE slug = 'netflix';
     
     -- Get category IDs
     SELECT id INTO action_cat_id FROM categories WHERE slug = 'action';
     SELECT id INTO comedy_cat_id FROM categories WHERE slug = 'comedy';
     SELECT id INTO scifi_cat_id FROM categories WHERE slug = 'sci-fi';
-    SELECT id INTO thriller_cat_id FROM categories WHERE slug = 'thriller';
+    SELECT id INTO drama_cat_id FROM categories WHERE slug = 'drama';
+    SELECT id INTO adventure_cat_id FROM categories WHERE slug = 'adventure';
     
-    -- Assign categories to videos
-    IF action_movie_id IS NOT NULL AND action_cat_id IS NOT NULL THEN
-        INSERT INTO video_categories (video_id, category_id) VALUES (action_movie_id, action_cat_id);
+    -- Insert sample movies
+    INSERT INTO movies (
+        title, description, video_url, thumbnail_url, poster_url, trailer_url,
+        duration, release_year, language, quality, published, featured, studio_id
+    ) VALUES
+    (
+        'Avengers: Infinity War',
+        'The Avengers and their allies must be willing to sacrifice all in an attempt to defeat the powerful Thanos.',
+        'https://example.com/videos/avengers.mp4',
+        'https://example.com/thumbnails/avengers.jpg',
+        'https://example.com/posters/avengers.jpg',
+        'https://example.com/trailers/avengers.mp4',
+        9060, -- 2h 31m
+        2018,
+        'en',
+        ARRAY['SD', 'HD', '4K'],
+        true,
+        true,
+        marvel_studio_id
+    ),
+    (
+        'The Lion King',
+        'Lion prince Simba flees his kingdom after the death of his father, but returns years later to reclaim his throne.',
+        'https://example.com/videos/lionking.mp4',
+        'https://example.com/thumbnails/lionking.jpg',
+        'https://example.com/posters/lionking.jpg',
+        'https://example.com/trailers/lionking.mp4',
+        5280, -- 1h 28m
+        2019,
+        'en',
+        ARRAY['SD', 'HD', '4K'],
+        true,
+        false,
+        disney_studio_id
+    ),
+    (
+        'Stranger Things: The Movie',
+        'The kids of Hawkins face their biggest challenge yet in this feature-length adventure.',
+        'https://example.com/videos/stranger.mp4',
+        'https://example.com/thumbnails/stranger.jpg',
+        'https://example.com/posters/stranger.jpg',
+        'https://example.com/trailers/stranger.mp4',
+        7200, -- 2h
+        2024,
+        'en',
+        ARRAY['SD', 'HD', '4K'],
+        true,
+        true,
+        netflix_studio_id
+    )
+    RETURNING id INTO movie1_id;
+    
+    -- Get movie IDs
+    SELECT id INTO movie1_id FROM movies WHERE title = 'Avengers: Infinity War';
+    SELECT id INTO movie2_id FROM movies WHERE title = 'The Lion King';
+    SELECT id INTO movie3_id FROM movies WHERE title = 'Stranger Things: The Movie';
+    
+    -- Assign categories to movies
+    IF movie1_id IS NOT NULL THEN
+        INSERT INTO movie_categories (movie_id, category_id) VALUES 
+            (movie1_id, action_cat_id),
+            (movie1_id, adventure_cat_id),
+            (movie1_id, scifi_cat_id);
     END IF;
     
-    IF action_movie_id IS NOT NULL AND thriller_cat_id IS NOT NULL THEN
-        INSERT INTO video_categories (video_id, category_id) VALUES (action_movie_id, thriller_cat_id);
+    IF movie2_id IS NOT NULL THEN
+        INSERT INTO movie_categories (movie_id, category_id) VALUES 
+            (movie2_id, adventure_cat_id),
+            (movie2_id, drama_cat_id);
     END IF;
     
-    IF comedy_movie_id IS NOT NULL AND comedy_cat_id IS NOT NULL THEN
-        INSERT INTO video_categories (video_id, category_id) VALUES (comedy_movie_id, comedy_cat_id);
+    IF movie3_id IS NOT NULL THEN
+        INSERT INTO movie_categories (movie_id, category_id) VALUES 
+            (movie3_id, scifi_cat_id),
+            (movie3_id, drama_cat_id),
+            (movie3_id, adventure_cat_id);
+    END IF;
+END $$;
+
+-- ==========================================
+-- SAMPLE TV SERIES (for testing)
+-- ==========================================
+DO $$
+DECLARE
+    netflix_studio_id UUID;
+    disney_studio_id UUID;
+    series1_id UUID;
+    series2_id UUID;
+    season1_id UUID;
+    season2_id UUID;
+    scifi_cat_id UUID;
+    drama_cat_id UUID;
+    fantasy_cat_id UUID;
+BEGIN
+    -- Get studio IDs
+    SELECT id INTO netflix_studio_id FROM studios WHERE slug = 'netflix';
+    SELECT id INTO disney_studio_id FROM studios WHERE slug = 'disney-plus';
+    
+    -- Get category IDs
+    SELECT id INTO scifi_cat_id FROM categories WHERE slug = 'sci-fi';
+    SELECT id INTO drama_cat_id FROM categories WHERE slug = 'drama';
+    SELECT id INTO fantasy_cat_id FROM categories WHERE slug = 'fantasy';
+    
+    -- Insert TV Series
+    INSERT INTO tv_series (
+        title, description, thumbnail_url, poster_url, trailer_url,
+        release_year, language, published, featured, studio_id, status
+    ) VALUES
+    (
+        'Stranger Things',
+        'When a young boy vanishes, a small town uncovers a mystery involving secret experiments and supernatural forces.',
+        'https://example.com/thumbnails/strangerthings.jpg',
+        'https://example.com/posters/strangerthings.jpg',
+        'https://example.com/trailers/strangerthings.mp4',
+        2016,
+        'en',
+        true,
+        true,
+        netflix_studio_id,
+        'ongoing'
+    ),
+    (
+        'The Mandalorian',
+        'The travels of a lone bounty hunter in the outer reaches of the galaxy far from the authority of the New Republic.',
+        'https://example.com/thumbnails/mandalorian.jpg',
+        'https://example.com/posters/mandalorian.jpg',
+        'https://example.com/trailers/mandalorian.mp4',
+        2019,
+        'en',
+        true,
+        true,
+        disney_studio_id,
+        'ongoing'
+    )
+    RETURNING id INTO series1_id;
+    
+    -- Get series IDs
+    SELECT id INTO series1_id FROM tv_series WHERE title = 'Stranger Things';
+    SELECT id INTO series2_id FROM tv_series WHERE title = 'The Mandalorian';
+    
+    -- Assign categories
+    IF series1_id IS NOT NULL THEN
+        INSERT INTO series_categories (series_id, category_id) VALUES 
+            (series1_id, scifi_cat_id),
+            (series1_id, drama_cat_id);
+            
+        -- Add seasons for Stranger Things
+        INSERT INTO seasons (series_id, season_number, title, description, release_year)
+        VALUES (series1_id, 1, 'Season 1', 'The disappearance of Will Byers', 2016)
+        RETURNING id INTO season1_id;
+        
+        -- Add episodes for Season 1
+        INSERT INTO episodes (season_id, series_id, episode_number, title, description, video_url, thumbnail_url, duration, published)
+        VALUES 
+            (season1_id, series1_id, 1, 'Chapter One: The Vanishing of Will Byers', 'On his way home from a friend''s house, young Will sees something terrifying.', 'https://example.com/episodes/st-s1e1.mp4', 'https://example.com/thumbnails/st-s1e1.jpg', 2880, true),
+            (season1_id, series1_id, 2, 'Chapter Two: The Weirdo on Maple Street', 'Lucas, Mike and Dustin try to talk to the girl they found in the woods.', 'https://example.com/episodes/st-s1e2.mp4', 'https://example.com/thumbnails/st-s1e2.jpg', 3360, true);
     END IF;
     
-    IF scifi_movie_id IS NOT NULL AND scifi_cat_id IS NOT NULL THEN
-        INSERT INTO video_categories (video_id, category_id) VALUES (scifi_movie_id, scifi_cat_id);
+    IF series2_id IS NOT NULL THEN
+        INSERT INTO series_categories (series_id, category_id) VALUES 
+            (series2_id, scifi_cat_id),
+            (series2_id, adventure_cat_id);
+            
+        -- Add seasons for The Mandalorian
+        INSERT INTO seasons (series_id, season_number, title, description, release_year)
+        VALUES (series2_id, 1, 'Season 1', 'The journey begins', 2019)
+        RETURNING id INTO season2_id;
+        
+        -- Add episodes for Season 1
+        INSERT INTO episodes (season_id, series_id, episode_number, title, description, video_url, thumbnail_url, duration, published)
+        VALUES 
+            (season2_id, series2_id, 1, 'Chapter 1: The Mandalorian', 'A Mandalorian bounty hunter tracks a target.', 'https://example.com/episodes/mando-s1e1.mp4', 'https://example.com/thumbnails/mando-s1e1.jpg', 2280, true),
+            (season2_id, series2_id, 2, 'Chapter 2: The Child', 'The Mandalorian must protect his mysterious asset.', 'https://example.com/episodes/mando-s1e2.mp4', 'https://example.com/thumbnails/mando-s1e2.jpg', 1920, true);
     END IF;
 END $$;
 

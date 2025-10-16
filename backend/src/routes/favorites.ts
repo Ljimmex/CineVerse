@@ -5,71 +5,103 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 
-// Get user's favorites
+// Get all favorites for user
 router.get('/', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { content_type } = req.query;
+
+    let query = supabaseAdmin
       .from('favorites')
-      .select(`
-        *,
-        videos (
-          id,
-          title,
-          description,
-          thumbnail_url,
-          poster_url,
-          duration,
-          release_year
-        )
-      `)
-      .eq('user_id', req.user!.id)
-      .order('created_at', { ascending: false });
+      .select('*')
+      .eq('user_id', req.user!.id);
+
+    if (content_type && ['movie', 'series'].includes(content_type as string)) {
+      query = query.eq('content_type', content_type);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       throw new AppError('Failed to fetch favorites', 400);
     }
 
-    res.json(data);
+    // Fetch full content details
+    const favoritesWithDetails = await Promise.all(
+      data.map(async (fav) => {
+        if (fav.content_type === 'movie') {
+          const { data: movie } = await supabaseAdmin
+            .from('movies_with_details')
+            .select('*')
+            .eq('id', fav.content_id)
+            .single();
+          return { ...fav, movie };
+        } else if (fav.content_type === 'series') {
+          const { data: series } = await supabaseAdmin
+            .from('series_with_details')
+            .select('*')
+            .eq('id', fav.content_id)
+            .single();
+          return { ...fav, series };
+        }
+        return fav;
+      })
+    );
+
+    res.json(favoritesWithDetails);
   } catch (error) {
     next(error);
   }
 });
 
-// Check if video is favorited
-router.get('/video/:videoId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+// Check if content is favorited
+router.get('/:contentType/:contentId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { contentType, contentId } = req.params;
+
+    if (!['movie', 'series'].includes(contentType)) {
+      throw new AppError('Invalid content type', 400);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('favorites')
-      .select('id')
+      .select('*')
       .eq('user_id', req.user!.id)
-      .eq('video_id', req.params.videoId)
+      .eq('content_type', contentType)
+      .eq('content_id', contentId)
       .single();
 
-    if (error && error.code !== 'PGRST116') { // Not found is ok
+    if (error && error.code !== 'PGRST116') {
       throw new AppError('Failed to check favorite status', 400);
     }
 
-    res.json({ isFavorite: !!data });
+    res.json({ favorited: !!data });
   } catch (error) {
     next(error);
   }
 });
 
 // Add to favorites
-router.post('/video/:videoId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:contentType/:contentId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { contentType, contentId } = req.params;
+
+    if (!['movie', 'series'].includes(contentType)) {
+      throw new AppError('Invalid content type', 400);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('favorites')
       .insert({
         user_id: req.user!.id,
-        video_id: req.params.videoId,
+        content_type: contentType,
+        content_id: contentId,
       })
       .select()
       .single();
 
     if (error) {
-      if (error.code === '23505') { // Unique violation
-        throw new AppError('Video already in favorites', 400);
+      if (error.code === '23505') { // Unique constraint violation
+        throw new AppError('Already in favorites', 400);
       }
       throw new AppError('Failed to add to favorites', 400);
     }
@@ -81,13 +113,20 @@ router.post('/video/:videoId', authenticate, async (req: Request, res: Response,
 });
 
 // Remove from favorites
-router.delete('/video/:videoId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:contentType/:contentId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { contentType, contentId } = req.params;
+
+    if (!['movie', 'series'].includes(contentType)) {
+      throw new AppError('Invalid content type', 400);
+    }
+
     const { error } = await supabaseAdmin
       .from('favorites')
       .delete()
       .eq('user_id', req.user!.id)
-      .eq('video_id', req.params.videoId);
+      .eq('content_type', contentType)
+      .eq('content_id', contentId);
 
     if (error) {
       throw new AppError('Failed to remove from favorites', 400);
@@ -100,4 +139,3 @@ router.delete('/video/:videoId', authenticate, async (req: Request, res: Respons
 });
 
 export default router;
-

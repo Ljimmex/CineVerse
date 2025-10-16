@@ -5,9 +5,15 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 
-// Get ratings for a video
-router.get('/video/:videoId', async (req: Request, res: Response, next: NextFunction) => {
+// Get ratings for content (movie, series, or episode)
+router.get('/:contentType/:contentId', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { contentType, contentId } = req.params;
+
+    if (!['movie', 'series', 'episode'].includes(contentType)) {
+      throw new AppError('Invalid content type', 400);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('ratings')
       .select(`
@@ -18,7 +24,8 @@ router.get('/video/:videoId', async (req: Request, res: Response, next: NextFunc
           avatar_url
         )
       `)
-      .eq('video_id', req.params.videoId)
+      .eq('content_type', contentType)
+      .eq('content_id', contentId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -40,13 +47,20 @@ router.get('/video/:videoId', async (req: Request, res: Response, next: NextFunc
   }
 });
 
-// Get user's rating for a video
-router.get('/video/:videoId/user', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+// Get user's rating for content
+router.get('/:contentType/:contentId/user', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { contentType, contentId } = req.params;
+
+    if (!['movie', 'series', 'episode'].includes(contentType)) {
+      throw new AppError('Invalid content type', 400);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('ratings')
       .select('*')
-      .eq('video_id', req.params.videoId)
+      .eq('content_type', contentType)
+      .eq('content_id', contentId)
       .eq('user_id', req.user!.id)
       .single();
 
@@ -61,9 +75,14 @@ router.get('/video/:videoId/user', authenticate, async (req: Request, res: Respo
 });
 
 // Create or update rating
-router.post('/video/:videoId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:contentType/:contentId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { contentType, contentId } = req.params;
     const { rating } = req.body;
+
+    if (!['movie', 'series', 'episode'].includes(contentType)) {
+      throw new AppError('Invalid content type', 400);
+    }
 
     if (rating < 1 || rating > 10) {
       throw new AppError('Rating must be between 1 and 10', 400);
@@ -73,9 +92,12 @@ router.post('/video/:videoId', authenticate, async (req: Request, res: Response,
       .from('ratings')
       .upsert({
         user_id: req.user!.id,
-        video_id: req.params.videoId,
+        content_type: contentType,
+        content_id: contentId,
         rating,
         updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,content_type,content_id'
       })
       .select()
       .single();
@@ -91,12 +113,19 @@ router.post('/video/:videoId', authenticate, async (req: Request, res: Response,
 });
 
 // Delete rating
-router.delete('/video/:videoId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:contentType/:contentId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { contentType, contentId } = req.params;
+
+    if (!['movie', 'series', 'episode'].includes(contentType)) {
+      throw new AppError('Invalid content type', 400);
+    }
+
     const { error } = await supabaseAdmin
       .from('ratings')
       .delete()
-      .eq('video_id', req.params.videoId)
+      .eq('content_type', contentType)
+      .eq('content_id', contentId)
       .eq('user_id', req.user!.id);
 
     if (error) {
@@ -109,5 +138,38 @@ router.delete('/video/:videoId', authenticate, async (req: Request, res: Respons
   }
 });
 
-export default router;
+// Legacy support - Get ratings for a video (deprecated)
+router.get('/video/:videoId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('ratings')
+      .select(`
+        *,
+        profiles:user_id (
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
+      .eq('legacy_video_id', req.params.videoId)
+      .order('created_at', { ascending: false });
 
+    if (error) {
+      throw new AppError('Failed to fetch ratings', 400);
+    }
+
+    const average = data.length > 0
+      ? data.reduce((sum, r) => sum + r.rating, 0) / data.length
+      : 0;
+
+    res.json({
+      ratings: data,
+      average: Math.round(average * 10) / 10,
+      count: data.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+export default router;

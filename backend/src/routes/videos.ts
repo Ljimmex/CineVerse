@@ -87,15 +87,14 @@ router.get('/:id', optionalAuth, async (req: Request, res: Response, next: NextF
           )
         )
       `)
-      .eq('id', req.params.id)
-      .single();
+      .eq('id', req.params.id);
 
     // Only show published videos to non-admin users
     if (!req.user || req.user.role !== 'admin') {
       query = query.eq('published', true);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await query.single();
 
     if (error) {
       throw new AppError('Video not found', 404);

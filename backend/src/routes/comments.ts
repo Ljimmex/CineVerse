@@ -5,9 +5,15 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 
-// Get comments for a video
-router.get('/video/:videoId', async (req: Request, res: Response, next: NextFunction) => {
+// Get comments for content (movie, series, or episode)
+router.get('/:contentType/:contentId', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { contentType, contentId } = req.params;
+
+    if (!['movie', 'series', 'episode'].includes(contentType)) {
+      throw new AppError('Invalid content type', 400);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('comments')
       .select(`
@@ -18,7 +24,8 @@ router.get('/video/:videoId', async (req: Request, res: Response, next: NextFunc
           avatar_url
         )
       `)
-      .eq('video_id', req.params.videoId)
+      .eq('content_type', contentType)
+      .eq('content_id', contentId)
       .is('parent_id', null)
       .order('created_at', { ascending: false });
 
@@ -56,9 +63,14 @@ router.get('/video/:videoId', async (req: Request, res: Response, next: NextFunc
 });
 
 // Create comment
-router.post('/video/:videoId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:contentType/:contentId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { contentType, contentId } = req.params;
     const { content, parent_id } = req.body;
+
+    if (!['movie', 'series', 'episode'].includes(contentType)) {
+      throw new AppError('Invalid content type', 400);
+    }
 
     if (!content || content.trim().length === 0) {
       throw new AppError('Comment content is required', 400);
@@ -68,7 +80,8 @@ router.post('/video/:videoId', authenticate, async (req: Request, res: Response,
       .from('comments')
       .insert({
         user_id: req.user!.id,
-        video_id: req.params.videoId,
+        content_type: contentType,
+        content_id: contentId,
         parent_id: parent_id || null,
         content: content.trim(),
       })
@@ -93,18 +106,32 @@ router.post('/video/:videoId', authenticate, async (req: Request, res: Response,
 });
 
 // Update comment
-router.put('/:id', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.put('/:commentId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { content } = req.body;
+
+    if (!content || content.trim().length === 0) {
+      throw new AppError('Comment content is required', 400);
+    }
+
+    // First check if user owns the comment
+    const { data: existingComment } = await supabaseAdmin
+      .from('comments')
+      .select('user_id')
+      .eq('id', req.params.commentId)
+      .single();
+
+    if (!existingComment || existingComment.user_id !== req.user!.id) {
+      throw new AppError('Unauthorized', 403);
+    }
 
     const { data, error } = await supabaseAdmin
       .from('comments')
       .update({
-        content,
+        content: content.trim(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', req.params.id)
-      .eq('user_id', req.user!.id)
+      .eq('id', req.params.commentId)
       .select()
       .single();
 
@@ -119,27 +146,29 @@ router.put('/:id', authenticate, async (req: Request, res: Response, next: NextF
 });
 
 // Delete comment
-router.delete('/:id', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:commentId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Check if user owns the comment or is admin
-    const { data: comment } = await supabaseAdmin
-      .from('comments')
-      .select('user_id')
-      .eq('id', req.params.id)
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user!.id)
       .single();
 
-    if (!comment) {
-      throw new AppError('Comment not found', 404);
-    }
+    const { data: existingComment } = await supabaseAdmin
+      .from('comments')
+      .select('user_id')
+      .eq('id', req.params.commentId)
+      .single();
 
-    if (comment.user_id !== req.user!.id && req.user!.role !== 'admin') {
-      throw new AppError('Not authorized to delete this comment', 403);
+    if (!existingComment || (existingComment.user_id !== req.user!.id && profile?.role !== 'admin')) {
+      throw new AppError('Unauthorized', 403);
     }
 
     const { error } = await supabaseAdmin
       .from('comments')
       .delete()
-      .eq('id', req.params.id);
+      .eq('id', req.params.commentId);
 
     if (error) {
       throw new AppError('Failed to delete comment', 400);
@@ -151,5 +180,53 @@ router.delete('/:id', authenticate, async (req: Request, res: Response, next: Ne
   }
 });
 
-export default router;
+// Legacy support - Get comments for a video (deprecated)
+router.get('/video/:videoId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('comments')
+      .select(`
+        *,
+        profiles:user_id (
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
+      .eq('legacy_video_id', req.params.videoId)
+      .is('parent_id', null)
+      .order('created_at', { ascending: false });
 
+    if (error) {
+      throw new AppError('Failed to fetch comments', 400);
+    }
+
+    const commentsWithReplies = await Promise.all(
+      data.map(async (comment) => {
+        const { data: replies } = await supabaseAdmin
+          .from('comments')
+          .select(`
+            *,
+            profiles:user_id (
+              id,
+              full_name,
+              avatar_url
+            )
+          `)
+          .eq('parent_id', comment.id)
+          .order('created_at', { ascending: true });
+
+        return {
+          ...comment,
+          replies: replies || [],
+        };
+      })
+    );
+
+    res.json(commentsWithReplies);
+  } catch (error) {
+    next(error);
+  }
+});
+
+export default router;

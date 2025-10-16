@@ -1,4 +1,4 @@
-import express, { Express, Request, Response, NextFunction } from 'express';
+import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -18,6 +18,11 @@ import favoriteRoutes from './routes/favorites.js';
 import watchHistoryRoutes from './routes/watchHistory.js';
 import stripeRoutes from './routes/stripe.js';
 import uploadRoutes from './routes/upload.js';
+import movieRoutes from './routes/movies.js';
+import seriesRoutes from './routes/series.js';
+import seasonRoutes from './routes/seasons.js';
+import episodeRoutes from './routes/episodes.js';
+import studioRoutes from './routes/studios.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -63,7 +68,12 @@ const API_VERSION = process.env.API_VERSION || 'v1';
 
 app.use(`/api/${API_VERSION}/auth`, authRoutes);
 app.use(`/api/${API_VERSION}/users`, userRoutes);
-app.use(`/api/${API_VERSION}/videos`, videoRoutes);
+app.use(`/api/${API_VERSION}/videos`, videoRoutes); // Legacy - deprecated
+app.use(`/api/${API_VERSION}/movies`, movieRoutes);
+app.use(`/api/${API_VERSION}/series`, seriesRoutes);
+app.use(`/api/${API_VERSION}/seasons`, seasonRoutes);
+app.use(`/api/${API_VERSION}/episodes`, episodeRoutes);
+app.use(`/api/${API_VERSION}/studios`, studioRoutes);
 app.use(`/api/${API_VERSION}/categories`, categoryRoutes);
 app.use(`/api/${API_VERSION}/ratings`, ratingRoutes);
 app.use(`/api/${API_VERSION}/comments`, commentRoutes);
